@@ -1,4 +1,4 @@
---// NOVA - main.lua (Xeno-совместимый)
+--// NOVA - main.lua (Xeno-совместимый, v2)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -6,27 +6,55 @@ local TweenService = game:GetService("TweenService")
 
 local Player = Players.LocalPlayer
 
-local BASE = "https://cdn.jsdelivr.net/gh/fdghfdghdfgrfdcg/novacode@main/"
+local BASE = "https://cdn.jsdelivr.net/gh/fdghfdghdfgrfdcg/novacode@latest/"
+
+print("[NOVA] === Старт загрузки ===")
 
 local function loadModule(path)
-    local src = game:HttpGet(BASE .. path)
-    local chunk = loadstring(src)
-    if not chunk then
-        error("[NOVA] Не удалось скомпилировать: " .. path)
+    print("[NOVA] Грузим: " .. path)
+
+    local ok, src = pcall(function()
+        return game:HttpGet(BASE .. path)
+    end)
+
+    if not ok or not src or #src == 0 then
+        warn("[NOVA] Не скачалось: " .. path)
+        return nil
     end
-    return chunk()
+
+    local chunk, err = loadstring(src)
+    if not chunk then
+        warn("[NOVA] Ошибка компиляции " .. path .. ": " .. tostring(err))
+        return nil
+    end
+
+    local ok2, mod = pcall(chunk)
+    if not ok2 then
+        warn("[NOVA] Ошибка выполнения " .. path .. ": " .. tostring(mod))
+        return nil
+    end
+
+    print("[NOVA]   OK (" .. #src .. " байт)")
+    return mod
 end
 
--- Загружаем модули
 local COLORS       = loadModule("ui/colors.lua")
 local CreateColumn = loadModule("ui/column.lua")
 local Loading      = loadModule("ui/loading.lua")
 
--- Функции
 loadModule("features/skeleton_esp.lua")
 
+print("[NOVA] COLORS:", COLORS)
+print("[NOVA] CreateColumn:", CreateColumn)
+print("[NOVA] Loading:", Loading)
+
+if not COLORS or not CreateColumn then
+    warn("[NOVA] КРИТИЧНО: не хватает модулей, выходим")
+    return
+end
+
 --==================================================
--- GUI (Xeno-совместимое создание)
+-- GUI
 --==================================================
 
 local GUI = Instance.new("ScreenGui")
@@ -37,7 +65,6 @@ GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local parented = false
 
--- Пробуем gethui (если есть)
 if gethui then
     pcall(function()
         GUI.Parent = gethui()
@@ -45,7 +72,6 @@ if gethui then
     end)
 end
 
--- Fallback на CoreGui
 if not parented then
     pcall(function()
         GUI.Parent = game:GetService("CoreGui")
@@ -53,7 +79,6 @@ if not parented then
     end)
 end
 
--- Финальный fallback на PlayerGui
 if not parented then
     GUI.Parent = Player:WaitForChild("PlayerGui")
 end
@@ -124,36 +149,36 @@ end
 -- COLUMNS
 --==================================================
 
-CreateColumn(Main, COLORS, Round, "Combat", 0, {})
+local okCol, errCol = pcall(function()
+    CreateColumn(Main, COLORS, Round, "Combat", 0, {})
+    CreateColumn(Main, COLORS, Round, "Movement", 168, {})
+    CreateColumn(Main, COLORS, Round, "Visuals", 336, {
+        "Skeleton ESP"
+    }, {
+        ["Skeleton ESP"] = function(Row, Text)
+            local esp = _G.SkeletonESP
+            if not esp then return end
 
-CreateColumn(Main, COLORS, Round, "Movement", 168, {})
+            esp.SetEnabled(not esp.Enabled)
 
-CreateColumn(Main, COLORS, Round, "Visuals", 336, {
-    "Skeleton ESP"
-}, {
-    ["Skeleton ESP"] = function(Row, Text)
-        local esp = _G.SkeletonESP
-        if not esp then return end
-
-        esp.SetEnabled(not esp.Enabled)
-
-        if esp.Enabled then
-            Row:SetAttribute("Active", true)
-            Row.BackgroundColor3 = COLORS.Accent
-            Row.BackgroundTransparency = 0
-            Text.TextColor3 = Color3.fromRGB(255, 255, 255)
-        else
-            Row:SetAttribute("Active", false)
-            Row.BackgroundColor3 = COLORS.Row
-            Row.BackgroundTransparency = 0.15
-            Text.TextColor3 = COLORS.SubText
+            if esp.Enabled then
+                Row:SetAttribute("Active", true)
+                Row.BackgroundColor3 = COLORS.Accent
+                Row.BackgroundTransparency = 0
+                Text.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                Row:SetAttribute("Active", false)
+                Row.BackgroundColor3 = COLORS.Row
+                Row.BackgroundTransparency = 0.15
+                Text.TextColor3 = COLORS.SubText
+            end
         end
-    end
-})
+    })
+    CreateColumn(Main, COLORS, Round, "Player", 504, {})
+    CreateColumn(Main, COLORS, Round, "Miscellaneous", 672, {})
+end)
 
-CreateColumn(Main, COLORS, Round, "Player", 504, {})
-
-CreateColumn(Main, COLORS, Round, "Miscellaneous", 672, {})
+print("[NOVA] Колонки:", okCol, errCol)
 
 --==================================================
 -- SEARCH
@@ -182,25 +207,28 @@ SearchStroke.Color = Color3.fromRGB(55, 56, 70)
 SearchStroke.Transparency = 0.45
 
 --==================================================
--- LOADING (пока пустышка — сразу показываем меню)
+-- LOADING
 --==================================================
 
-pcall(function()
-    Loading.Show(COLORS, Round, TweenService, Player, GUI, Main, function()
-        Main.Visible = true
-
-        TweenService:Create(
-            Main,
-            TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-            { Size = UDim2.fromOffset(840, 450) }
-        ):Play()
+if Loading and Loading.Show then
+    pcall(function()
+        Loading.Show(COLORS, Round, TweenService, Player, GUI, Main, function()
+            Main.Visible = true
+            TweenService:Create(
+                Main,
+                TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                { Size = UDim2.fromOffset(840, 450) }
+            ):Play()
+        end)
     end)
-end)
-
--- На случай если Loading.Show не вызвал callback:
-if not Main.Visible then
-    Main.Visible = true
 end
+
+-- Жёсткий fallback — если ничего не показало
+task.delay(0.5, function()
+    if not Main.Visible then
+        Main.Visible = true
+    end
+end)
 
 --==================================================
 -- KEYBINDS
