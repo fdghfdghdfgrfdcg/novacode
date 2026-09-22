@@ -1,8 +1,7 @@
-return function(COLORS, Round, TweenService, Player)
+return function(...)  -- ничего не нужно при загрузке модуля, только при Show
     local Loading = {}
 
-    function Loading.Show(callback)
-        -- сюда позже полный код загрузочного экрана
+    function Loading.Show(COLORS, Round, TweenService, Player, GUI, Main, callback)
         if callback then callback() end
     end
 
