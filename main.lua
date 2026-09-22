@@ -1,4 +1,4 @@
---// NOVA - main.lua (ДИАГНОСТИКА)
+--// NOVA - main.lua (Xeno-совместимый)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -8,73 +8,72 @@ local Player = Players.LocalPlayer
 
 local BASE = "https://cdn.jsdelivr.net/gh/fdghfdghdfgrfdcg/novacode@main/"
 
-print("[NOVA] === СТАРТ ===")
-
 local function loadModule(path)
-    print("[NOVA] Грузим: " .. path)
     local src = game:HttpGet(BASE .. path)
-    print("[NOVA]   скачано, " .. #src .. " байт")
-
-    local chunk, err = loadstring(src)
+    local chunk = loadstring(src)
     if not chunk then
-        warn("[NOVA]   ошибка компиляции: " .. tostring(err))
-        return nil
+        error("[NOVA] Не удалось скомпилировать: " .. path)
     end
-
-    local ok, mod = pcall(chunk)
-    if not ok then
-        warn("[NOVA]   ошибка выполнения: " .. tostring(mod))
-        return nil
-    end
-
-    print("[NOVA]   OK")
-    return mod
+    return chunk()
 end
 
+-- Загружаем модули
 local COLORS       = loadModule("ui/colors.lua")
 local CreateColumn = loadModule("ui/column.lua")
 local Loading      = loadModule("ui/loading.lua")
 
+-- Функции
 loadModule("features/skeleton_esp.lua")
 
-print("[NOVA] COLORS:", COLORS)
-print("[NOVA] CreateColumn:", CreateColumn)
-print("[NOVA] Loading:", Loading)
-print("[NOVA] SkeletonESP:", _G.SkeletonESP)
-
-if not COLORS or not CreateColumn or not Loading then
-    warn("[NOVA] КРИТИЧНО: модули не загрузились, выходим")
-    return
-end
-
-print("[NOVA] Создаём ScreenGui...")
+--==================================================
+-- GUI (Xeno-совместимое создание)
+--==================================================
 
 local GUI = Instance.new("ScreenGui")
 GUI.Name = "NOVA_Menu"
 GUI.ResetOnSpawn = false
 GUI.IgnoreGuiInset = true
+GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-local ok, err = pcall(function() GUI.Parent = gethui() end)
-print("[NOVA] gethui(): ", ok, err)
+local parented = false
 
-if not GUI.Parent then
+-- Пробуем gethui (если есть)
+if gethui then
+    pcall(function()
+        GUI.Parent = gethui()
+        parented = true
+    end)
+end
+
+-- Fallback на CoreGui
+if not parented then
+    pcall(function()
+        GUI.Parent = game:GetService("CoreGui")
+        parented = true
+    end)
+end
+
+-- Финальный fallback на PlayerGui
+if not parented then
     GUI.Parent = Player:WaitForChild("PlayerGui")
-    print("[NOVA] Fallback на PlayerGui")
 end
 
 print("[NOVA] GUI.Parent =", GUI.Parent)
 
-print("[NOVA] Создаём Main...")
+--==================================================
+-- MAIN
+--==================================================
 
 local Main = Instance.new("Frame")
 Main.Parent = GUI
 Main.Size = UDim2.fromOffset(840, 450)
 Main.Position = UDim2.new(0.5, -420, 0.5, -225)
-Main.BackgroundColor3 = Color3.fromRGB(30, 30, 40)  -- временно видимый!
-Main.BackgroundTransparency = 0                    -- временно видимый!
-Main.Visible = true                                -- временно видимый!
+Main.BackgroundTransparency = 1
+Main.Visible = false
 
-print("[NOVA] Main создан. Visible =", Main.Visible, "Size =", Main.Size)
+--==================================================
+-- DRAG
+--==================================================
 
 local DragArea = Instance.new("Frame")
 DragArea.Parent = Main
@@ -111,46 +110,54 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+--==================================================
+-- ROUND
+--==================================================
+
 local function Round(obj, radius)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius)
     corner.Parent = obj
 end
 
-print("[NOVA] Создаём колонки...")
+--==================================================
+-- COLUMNS
+--==================================================
 
-local okCol, errCol = pcall(function()
-    CreateColumn(Main, COLORS, Round, "Combat", 0, {})
-    CreateColumn(Main, COLORS, Round, "Movement", 168, {})
-    CreateColumn(Main, COLORS, Round, "Visuals", 336, {
-        "Skeleton ESP"
-    }, {
-        ["Skeleton ESP"] = function(Row, Text)
-            local esp = _G.SkeletonESP
-            if not esp then return end
+CreateColumn(Main, COLORS, Round, "Combat", 0, {})
 
-            esp.SetEnabled(not esp.Enabled)
+CreateColumn(Main, COLORS, Round, "Movement", 168, {})
 
-            if esp.Enabled then
-                Row:SetAttribute("Active", true)
-                Row.BackgroundColor3 = COLORS.Accent
-                Row.BackgroundTransparency = 0
-                Text.TextColor3 = Color3.fromRGB(255, 255, 255)
-            else
-                Row:SetAttribute("Active", false)
-                Row.BackgroundColor3 = COLORS.Row
-                Row.BackgroundTransparency = 0.15
-                Text.TextColor3 = COLORS.SubText
-            end
+CreateColumn(Main, COLORS, Round, "Visuals", 336, {
+    "Skeleton ESP"
+}, {
+    ["Skeleton ESP"] = function(Row, Text)
+        local esp = _G.SkeletonESP
+        if not esp then return end
+
+        esp.SetEnabled(not esp.Enabled)
+
+        if esp.Enabled then
+            Row:SetAttribute("Active", true)
+            Row.BackgroundColor3 = COLORS.Accent
+            Row.BackgroundTransparency = 0
+            Text.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            Row:SetAttribute("Active", false)
+            Row.BackgroundColor3 = COLORS.Row
+            Row.BackgroundTransparency = 0.15
+            Text.TextColor3 = COLORS.SubText
         end
-    })
-    CreateColumn(Main, COLORS, Round, "Player", 504, {})
-    CreateColumn(Main, COLORS, Round, "Miscellaneous", 672, {})
-end)
+    end
+})
 
-print("[NOVA] Колонки:", okCol, errCol)
+CreateColumn(Main, COLORS, Round, "Player", 504, {})
 
-print("[NOVA] Создаём Search...")
+CreateColumn(Main, COLORS, Round, "Miscellaneous", 672, {})
+
+--==================================================
+-- SEARCH
+--==================================================
 
 local Search = Instance.new("TextBox")
 Search.Parent = Main
@@ -174,26 +181,30 @@ SearchStroke.Parent = Search
 SearchStroke.Color = Color3.fromRGB(55, 56, 70)
 SearchStroke.Transparency = 0.45
 
-print("[NOVA] Search создан")
+--==================================================
+-- LOADING (пока пустышка — сразу показываем меню)
+--==================================================
 
-print("[NOVA] Вызываем Loading.Show...")
-
-local okLoad, errLoad = pcall(function()
+pcall(function()
     Loading.Show(COLORS, Round, TweenService, Player, GUI, Main, function()
-        print("[NOVA] Callback загрузки сработал — показываем меню")
         Main.Visible = true
+
+        TweenService:Create(
+            Main,
+            TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            { Size = UDim2.fromOffset(840, 450) }
+        ):Play()
     end)
 end)
 
-print("[NOVA] Loading.Show:", okLoad, errLoad)
+-- На случай если Loading.Show не вызвал callback:
+if not Main.Visible then
+    Main.Visible = true
+end
 
-print("[NOVA] Main.Visible =", Main.Visible)
-print("[NOVA] Main.Parent =", Main.Parent)
-print("[NOVA] GUI.Parent =", GUI.Parent)
-print("[NOVA] Main.AbsoluteSize =", Main.AbsoluteSize)
-print("[NOVA] Main.AbsolutePosition =", Main.AbsolutePosition)
-
-print("[NOVA] === ГОТОВО ===")
+--==================================================
+-- KEYBINDS
+--==================================================
 
 local isOpen = true
 
@@ -213,3 +224,5 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         GUI:Destroy()
     end
 end)
+
+print("[NOVA] Запуск завершён. Main.Visible =", Main.Visible)
