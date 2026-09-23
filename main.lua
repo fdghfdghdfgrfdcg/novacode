@@ -6,7 +6,7 @@ local TweenService = game:GetService("TweenService")
 
 local Player = Players.LocalPlayer
 
-local BASE = "https://cdn.jsdelivr.net/gh/fdghfdghdfgrfdcg/novacode@latest/"
+local BASE = "https://raw.githubusercontent.com/fdghfdghdfgrfdcg/novacode/main/"
 
 print("[NOVA] === Старт загрузки ===")
 
